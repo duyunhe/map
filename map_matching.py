@@ -46,9 +46,13 @@ class MapNode(object):
     def __init__(self, point, nodeid):
         self.point, self.nodeid = point, nodeid
         self.link_list = []     # 连接到其他点的列表, [[edge0, node0], [edge1, node1]....]
+        self.rlink_list = []
 
     def add_link(self, edge, node):
         self.link_list.append([edge, node])
+
+    def add_rlink(self, edge, node):
+        self.rlink_list.append([edge, node])
 
 
 class MapEdge(object):
@@ -215,9 +219,12 @@ def read_xml(filename):
         n0, n1 = edge.nodeid0, edge.nodeid1
         if edge.oneway is True:
             map_node_dict[n0].add_link(edge, n1)
+            map_node_dict[n1].add_rlink(edge, n0)
         else:
             map_node_dict[n0].add_link(edge, n1)
             map_node_dict[n1].add_link(edge, n0)
+            map_node_dict[n0].add_rlink(edge, n1)
+            map_node_dict[n1].add_rlink(edge, n0)
 
 
 def get_trace_from_project(node, last_point, last_edge, cur_point, cur_edge, cnt):
@@ -302,7 +309,7 @@ def make_kdtree():
     return KDTree(X, leaf_size=2, metric="euclidean"), X
 
 
-def get_candidate_first(taxi_data):
+def get_candidate_first(taxi_data, cnt=-1):
     """
     get candidate edges from road network which fit point 
     :param taxi_data: Taxi_Data  .px, .py, .speed, .stime
@@ -311,14 +318,23 @@ def get_candidate_first(taxi_data):
     kdt, X = make_kdtree()
     dist, ind = kdt.query([[taxi_data.px, taxi_data.py]], k=50)
 
+    pts = []
     seg_set = set()
     # fetch nearest map nodes in network around point, then check their linked edges
     for i in ind[0]:
+        pts.append([X[i][0], X[i][1]])
         node_id = nodeid_list[i]
         edge_list = map_node_dict[node_id].link_list
         for e, nd in edge_list:
             seg_set.add(e.edge_index)
+        # here, need reverse link,
+        # for its first node can be far far away, then this edge will not be included
+        edge_list = map_node_dict[node_id].rlink_list
+        for e, nd in edge_list:
+            seg_set.add(e.edge_index)
 
+    # if cnt == 59:
+    #     draw_points(pts)
     edge_can_list = []
     for i in seg_set:
         edge_can_list.append(map_edge_list[i])
@@ -509,13 +525,11 @@ def POINT_MATCH(traj_order):
     traj_mod = []
     for data in traj_order:
         if first_point:
-            candidate_edges = get_candidate_first(data)
+            candidate_edges = get_candidate_first(data, cnt)
             # Taxi_Data .px .py .stime .speed
             # first_point = False
             point, last_edge = get_mod_point(data, candidate_edges)
             traj_mod.append(point)
-            if cnt == 59:
-                draw_edge_list(candidate_edges)
             cnt += 1
         else:
             pass
