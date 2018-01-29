@@ -29,8 +29,8 @@ nodeid_list = []
 
 
 class DistNode(object):
-    def __init__(self, ndid, dist):
-        self.ndid = ndid
+    def __init__(self, nodeid, dist):
+        self.nodeid = nodeid
         self.dist = dist
 
     def __lt__(self, other):
@@ -40,13 +40,15 @@ class DistNode(object):
 class MapNode(object):
     """
     点表示
-    point([px,py]), nodeid, link_list
-    维护dict，key=nodeid, value=MapNode
+    point([px,py]), nodeid, link_list, rlink_list, dist_dict
+    在全局维护dict, key=nodeid, value=MapNode
     """
     def __init__(self, point, nodeid):
         self.point, self.nodeid = point, nodeid
-        self.link_list = []     # 连接到其他点的列表, [[edge0, node0], [edge1, node1]....]
+        self.link_list = []         # 连接到其他点的列表, [[edge0, node0], [edge1, node1]....]
         self.rlink_list = []
+        self.dist_dict = {}         # 距离字典，存储500m之内的点的道路距离
+        self.reach_list = []        # 可访问的边列表
 
     def add_link(self, edge, node):
         self.link_list.append([edge, node])
@@ -173,6 +175,60 @@ def draw_point(point, c):
     plt.plot([point[0]], [point[1]], c, markersize=4)
 
 
+def calc_link():
+    for edge in map_edge_list:
+        n0, n1 = edge.nodeid0, edge.nodeid1
+        if edge.oneway is True:
+            map_node_dict[n0].add_link(edge, n1)
+            map_node_dict[n1].add_rlink(edge, n0)
+        else:
+            map_node_dict[n0].add_link(edge, n1)
+            map_node_dict[n1].add_link(edge, n0)
+            map_node_dict[n0].add_rlink(edge, n1)
+            map_node_dict[n1].add_rlink(edge, n0)
+
+
+def calc_node_dict(node):
+    """
+    dijkstra算法计算最短路径
+    保存在node中dist字典内
+    :param node: MapNode
+    :return: null
+    """
+    T = 500                 # dist_thread
+    node_set = set()        # node_set用于判断是否访问过
+    edge_set = set()        # edge_set用于记录能够访问到的边
+    q = Queue.PriorityQueue(maxsize=-1)     # 优先队列优化
+    # initialize
+    init_node = DistNode(node.nodeid, 0)
+    node_set.add(node.nodeid)
+    q.put(init_node)
+    # best first search
+    while not q.empty():
+        cur_node = q.get()
+        if cur_node.dist > T:
+            break
+        for edge, nextid in map_node_dict[cur_node.nodeid].link_list:
+            edge_set.add(edge.edge_index)
+            if nextid in node_set:
+                continue
+            node_set.add(nextid)
+            new_node = DistNode(nextid, cur_node.dist + edge.edge_length)
+            node.dist_dict[nextid] = new_node.dist
+            q.put(new_node)
+
+    # store path
+    for idx in edge_set:
+        node.reach_list.append(map_edge_list[idx])
+
+
+def calc_dist_for_each():
+    bt = clock()
+    for nodeid, node in map_node_dict.items():
+        calc_node_dict(node)
+    print clock() - bt
+
+
 def read_xml(filename):
     tree = ET.parse(filename)
     p = tree.find('meta')
@@ -215,16 +271,9 @@ def read_xml(filename):
                 map_edge_list.append(edge)
             last_nd = nd
 
-    for edge in map_edge_list:
-        n0, n1 = edge.nodeid0, edge.nodeid1
-        if edge.oneway is True:
-            map_node_dict[n0].add_link(edge, n1)
-            map_node_dict[n1].add_rlink(edge, n0)
-        else:
-            map_node_dict[n0].add_link(edge, n1)
-            map_node_dict[n1].add_link(edge, n0)
-            map_node_dict[n0].add_rlink(edge, n1)
-            map_node_dict[n1].add_rlink(edge, n0)
+    calc_link()
+
+    calc_dist_for_each()
 
 
 def get_trace_from_project(node, last_point, last_edge, cur_point, cur_edge, cnt):
@@ -333,13 +382,34 @@ def get_candidate_first(taxi_data, cnt=-1):
         for e, nd in edge_list:
             seg_set.add(e.edge_index)
 
-    # if cnt == 59:
-    #     draw_points(pts)
     edge_can_list = []
     for i in seg_set:
         edge_can_list.append(map_edge_list[i])
 
     return edge_can_list
+
+
+def get_candidate_later(taxi_data, last_point, last_edge):
+    """
+    
+    :param taxi_data: Taxi_Data
+    :param last_point: [px, py]
+    :param last_edge: MapEdge
+    :return: edge_can_list [edge0, edge1....]
+    """
+    edge_can_list = []
+    edge_set = set()
+
+    T = 80000 / 3600 * 10
+    r_point, ac = point_project(last_point, map_node_dict[last_edge.nodeid0].point,
+                                map_node_dict[last_edge.nodeid1].point)
+    dist0 = np.linalg.norm(ac)
+    dist1 = last_edge.edge_length - dist0
+    if last_edge.oneway:
+        nodeid = last_edge.nodeid1
+        for nid, dist in map_node_dict[nodeid].items():
+            pass
+
 
 
 def get_mod_point(taxi_data, candidate):
@@ -527,17 +597,17 @@ def POINT_MATCH(traj_order):
         if first_point:
             candidate_edges = get_candidate_first(data, cnt)
             # Taxi_Data .px .py .stime .speed
-            # first_point = False
+            first_point = False
             point, last_edge = get_mod_point(data, candidate_edges)
             traj_mod.append(point)
+            last_point = point
             cnt += 1
         else:
-            pass
-            # candidate_edges = get_candidate_later(traj_point)
-            # # Taxi_Data .px .py .stime .speed
-            # first_point = False
-            # px, py, last_edge = get_mod_point(traj_point, candidate_edges)
+            candidate_edges = get_candidate_later(data, last_point, last_edge)
+            # Taxi_Data .px .py .stime .speed
+            # point, last_edge = get_mod_point(traj_point, candidate_edges)
             # traj_mod.append([px, py])
+
 
     return traj_mod
 
