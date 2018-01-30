@@ -434,11 +434,11 @@ def get_mod_point(taxi_data, candidate, last_point, cnt=-1):
     else:
         min_score = 1e20
         # print "new {0}, len={1}".format(cnt, len(candidate))
-        if cnt == 60:
-            draw_point(point, 'b')
-            draw_point(last_point, 'm')
+        if cnt == 59:
+            draw_point(point, 'bo')
+            draw_point(last_point, 'mo')
             draw_edge_list(candidate)
-            return None, None
+            # return None, None
 
         for edge in candidate:
             n0, n1 = edge.nodeid0, edge.nodeid1
@@ -532,15 +532,19 @@ def POINT_MATCH(traj_order):
             last_point = point
         else:
             # 首先判断两个点是否离得足够远
-            if calc_dist([data.px, data.py], last_point) < 10:
+            T = 10000 / 3600 * 10
+            cur_point = [data.px, data.py]
+            interval = calc_dist(cur_point, last_point)
+            print cnt, interval
+            if interval < T:
                 continue
             candidate_edges = get_candidate_later(last_point, last_edge)
             point, last_edge = get_mod_point(data, candidate_edges, last_point, cnt)
             traj_mod.append(point)
-            last_point = point
+            last_point = cur_point
             plt.text(data.px, data.py, '{0}'.format(cnt))
         cnt += 1
-        if cnt == 61:
+        if cnt == 58:
             break
 
     return traj_mod
@@ -564,7 +568,7 @@ def matching():
     draw_trace(traj_order)
 
     traj_mod = POINT_MATCH(traj_order)
-    # draw_points(traj_mod)
+    draw_points(traj_mod)
 
 
 fig = plt.figure(figsize=(16, 8))
