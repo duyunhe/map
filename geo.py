@@ -2,6 +2,7 @@
 from ctypes import *
 import math
 import numpy as np
+from map_struct import MapEdge, MapNode
 
 dll = WinDLL("CoordTransDLL.dll")
 
@@ -93,6 +94,12 @@ def get_diff(e0, e1):
     elif de < -180:
         de += 360
     return math.fabs(de)
+
+
+def point_project_edge(point, edge):
+    n0, n1 = edge.node0, edge.node1
+    sp0, sp1 = n0.point, n1.point
+    return point_project(point, sp0, sp1)
 
 
 def point_project(point, segment_point0, segment_point1):

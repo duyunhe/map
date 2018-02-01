@@ -5,6 +5,7 @@ from traj import load_traj, load_trace
 from sklearn.neighbors import KDTree
 import math
 import Queue
+from map_struct import DistNode, MapEdge, MapNode
 from geo import point2segment, point_project, calc_dist, bl2xy, is_near_segment, calc_included_angle
 from time import clock
 import traj
@@ -28,93 +29,10 @@ map_way = {}
 nodeid_list = []
 
 
-class DistNode(object):
-    def __init__(self, nodeid, dist):
-        self.nodeid = nodeid
-        self.dist = dist
-
-    def __lt__(self, other):
-        return self.dist < other.dist
-
-
-class MapNode(object):
-    """
-    点表示
-    point([px,py]), nodeid, link_list, rlink_list, dist_dict
-    在全局维护dict, key=nodeid, value=MapNode
-    """
-    def __init__(self, point, nodeid):
-        self.point, self.nodeid = point, nodeid
-        self.link_list = []         # 连接到其他点的列表, [[edge0, node0], [edge1, node1]....]
-        self.rlink_list = []
-        self.dist_dict = {}         # 距离字典，存储500m之内的点的道路距离
-        self.reach_set = None       # 可访问的边index列表
-
-    def add_link(self, edge, node):
-        self.link_list.append([edge, node])
-
-    def add_rlink(self, edge, node):
-        self.rlink_list.append([edge, node])
-
-
-class MapEdge(object):
-    """
-    线段表示
-    nodeid_0, nodeid_1,
-    oneway(true or false), edge_index, edge_length
-    维护list[MapEdge]
-    """
-    def __init__(self, nodeid0, nodeid1, oneway, edge_index, edge_length):
-        self.nodeid0, self.nodeid1 = nodeid0, nodeid1
-        self.oneway = oneway
-        self.edge_index = edge_index
-        self.edge_length = edge_length
-
-
-def load_write():
-    traj_order = load_traj("./data/test.csv")
-    cnt = 0
-    pos = 6
-    fp = open("traj_sample.txt", "w")
-    for order, traj in traj_order.items():
-        # traj is list
-        if len(traj) < 10:
-            continue
-        x, y, z = [], [], []
-        for lon, lat, _ in traj:
-            tx, ty = bl2xy(lat, lon)
-            x.append(tx)
-            y.append(ty)
-        if cnt == pos:
-            plt.plot(x, y, 'k--', marker='x')
-            for line in zip(x, y):
-                fp.write(str(line))
-                fp.write('\n')
-        cnt += 1
-        if cnt > pos:
-            break
-    fp.close()
-
-
 def edge2xy(e):
     x0, y0 = map_node_dict[e.nodeid0].point[0:2]
     x1, y1 = map_node_dict[e.nodeid1].point[0:2]
     return x0, y0, x1, y1
-
-
-def cal_max_way(way):
-    max_dist = 0
-    for w in way:
-        lx, ly = 0, 0
-        pl = way[w]
-        for t in pl['node']:
-            x, y = t[0], t[1]
-            if lx != 0:
-                dist = math.sqrt((lx - x) ** 2 + (ly - y) ** 2)
-                if max_dist < dist:
-                    max_dist = dist
-            lx, ly = x, y
-    return max_dist
 
 
 def draw_map():
@@ -122,9 +40,9 @@ def draw_map():
         pl = map_way[i]
         node_list = pl['node']
         x, y = [], []
-        for nodeid in node_list:
-            x.append(map_node_dict[nodeid].point[0])
-            y.append(map_node_dict[nodeid].point[1])
+        for node in node_list:
+            x.append(node.point[0])
+            y.append(node.point[1])
 
         c = color[region[pl['highway']]]
         plt.plot(x, y, c, alpha=0.3)
@@ -175,17 +93,63 @@ def draw_point(point, c):
     plt.plot([point[0]], [point[1]], c, markersize=6)
 
 
-def calc_link():
+def store_link():
     for edge in map_edge_list:
-        n0, n1 = edge.nodeid0, edge.nodeid1
+        n0, n1 = edge.node0, edge.node1
         if edge.oneway is True:
-            map_node_dict[n0].add_link(edge, n1)
-            map_node_dict[n1].add_rlink(edge, n0)
+            n0.add_link(edge, n1)
+            n1.add_rlink(edge, n0)
         else:
-            map_node_dict[n0].add_link(edge, n1)
-            map_node_dict[n1].add_link(edge, n0)
-            map_node_dict[n0].add_rlink(edge, n1)
-            map_node_dict[n1].add_rlink(edge, n0)
+            n0.add_link(edge, n1)
+            n1.add_link(edge, n0)
+            n0.add_rlink(edge, n1)
+            n1.add_rlink(edge, n0)
+
+
+def store_node(tree):
+    p = tree.find('meta')
+    nds = p.findall('node')
+    for x in nds:
+        node_dic = x.attrib
+        nodeid = node_dic['id']
+        dx, dy = bl2xy(float(node_dic['lat']), float(node_dic['lon']))
+        node = MapNode([dx, dy], nodeid)
+        map_node_dict[nodeid] = node
+
+
+def store_edge(tree):
+    p = tree.find('meta')
+    wys = p.findall('way')
+    for w in wys:
+        way_dic = w.attrib
+        wid = way_dic['id']
+        node_list = w.findall('nd')
+        map_way[wid] = {}
+        oneway = False
+        ref = map_way[wid]
+        tag_list = w.findall('tag')
+        for tag in tag_list:
+            tag_dic = tag.attrib
+            ref[tag_dic['k']] = tag_dic['v']
+        if 'oneway' in ref:
+            oneway = ref['oneway'] == 'yes'
+
+        node_in_way = []
+        for nd in node_list:
+            node_dic = nd.attrib
+            node_in_way.append(map_node_dict[node_dic['ref']])
+        ref['node'] = node_in_way
+        last_node = None
+        ref['edge'] = []
+        for node in node_in_way:
+            if last_node is not None:
+                edge_index = len(map_edge_list)
+                ref['edge'].append(edge_index)
+                p0, p1 = last_node.point, node.point
+                edge_length = calc_dist(p0, p1)
+                edge = MapEdge(last_node, node, oneway, edge_index, edge_length)
+                map_edge_list.append(edge)
+            last_node = node
 
 
 def calc_node_dict(node):
@@ -221,58 +185,11 @@ def calc_node_dict(node):
     node.reach_set = edge_set
 
 
-def calc_dist_for_each():
-    bt = clock()
-    for nodeid, node in map_node_dict.items():
-        calc_node_dict(node)
-    print clock() - bt
-
-
 def read_xml(filename):
     tree = ET.parse(filename)
-    p = tree.find('meta')
-    nds = p.findall('node')
-    for x in nds:
-        node_dic = x.attrib
-        nodeid = node_dic['id']
-        dx, dy = bl2xy(float(node_dic['lat']), float(node_dic['lon']))
-        node = MapNode([dx, dy], nodeid)
-        map_node_dict[nodeid] = node
-    wys = p.findall('way')
-    for w in wys:
-        way_dic = w.attrib
-        wid = way_dic['id']
-        node_list = w.findall('nd')
-        map_way[wid] = {}
-        oneway = False
-        ref = map_way[wid]
-        tag_list = w.findall('tag')
-        for tag in tag_list:
-            tag_dic = tag.attrib
-            ref[tag_dic['k']] = tag_dic['v']
-        if 'oneway' in ref:
-            oneway = ref['oneway'] == 'yes'
-
-        node_in_way = []
-        for nd in node_list:
-            node_dic = nd.attrib
-            node_in_way.append(node_dic['ref'])
-        ref['node'] = node_in_way
-        last_nd = ''
-        ref['edge'] = []
-        for nd in node_in_way:
-            if last_nd != '':
-                edge_index = len(map_edge_list)
-                ref['edge'].append(edge_index)
-                p0, p1 = map_node_dict[last_nd].point, map_node_dict[nd].point
-                edge_length = calc_dist(p0, p1)
-                edge = MapEdge(last_nd, nd, oneway, edge_index, edge_length)
-                map_edge_list.append(edge)
-            last_nd = nd
-
-    calc_link()
-
-    calc_dist_for_each()
+    store_node(tree)
+    store_edge(tree)
+    store_link()
 
 
 def get_trace_from_project(node, last_point, last_edge, cur_point, cur_edge, cnt):
@@ -394,24 +311,95 @@ def get_candidate_later(last_point, last_edge):
     :param last_edge: MapEdge
     :return: edge_can_list [edge0, edge1....]
     """
-    edge_can_list = []
+    edge_can_list = [last_edge]
+
+    T = 80000 / 3600 * 10       # dist_thread
+    node_set = set()            # node_set用于判断是否访问过
+    edge_set = set()            # edge_set用于记录能够访问到的边
+    q = Queue.PriorityQueue(maxsize=-1)     # 优先队列优化
+
+    # _, ac = point_project(point)
+    if last_edge.oneway:
+        node = last_edge.node1
+        dnode = DistNode(nodeid, 0)
+
+    # you should add last edge matched if current and last points projected are in the same edge
     edge_set = set()
     # r_point, ac = point_project(last_point, map_node_dict[last_edge.nodeid0].point,
     #                             map_node_dict[last_edge.nodeid1].point)
-    # 简略版
-    if last_edge.oneway:
-        nodeid = last_edge.nodeid1
-        edge_set = edge_set | map_node_dict[nodeid].reach_set
+    # brief version
 
-    else:
-        nodeid0 = last_edge.nodeid0
-        edge_set = edge_set | map_node_dict[nodeid0].reach_set
-        nodeid1 = last_edge.nodeid1
-        edge_set = edge_set | map_node_dict[nodeid1].reach_set
-    for i in edge_set:
-        edge_can_list.append(map_edge_list[i])
+    #     edge_set = edge_set | map_node_dict[nodeid].reach_set
+    #
+    # else:
+    #     nodeid0 = last_edge.nodeid0
+    #     edge_set = edge_set | map_node_dict[nodeid0].reach_set
+    #     nodeid1 = last_edge.nodeid1
+    #     edge_set = edge_set | map_node_dict[nodeid1].reach_set
+    # for i in edge_set:
+    #     edge_can_list.append(map_edge_list[i])
 
     return edge_can_list
+
+
+def _get_mod_point_first(candidate, point):
+    """
+    :param candidate: 
+    :param point: current point
+    :return: 
+    """
+    min_dist, sel_edge = 1e20, None
+
+    # first point
+    for edge in candidate:
+        n0, n1 = edge.nodeid0, edge.nodeid1
+        p0, p1 = map_node_dict[n0].point, map_node_dict[n1].point
+        dist = point2segment(point, p0, p1)
+        if min_dist > dist:
+            min_dist, sel_edge = dist, edge
+
+    sel_node0, sel_node1 = sel_edge.nodeid0, sel_edge.nodeid1
+    project_point, ac = point_project(point, map_node_dict[sel_node0].point,
+                                      map_node_dict[sel_node1].point)
+    return project_point, sel_edge
+
+
+def _get_mod_point_later(candidate, point, last_point):
+    """
+    :param candidate: 
+    :param point: current position point
+    :param last_point: last position point
+    :return: 
+    """
+    min_score = 1e20
+    # print "new {0}, len={1}".format(cnt, len(candidate))
+    # if cnt == 37:
+    #     draw_point(point, 'bo')
+    #     draw_point(last_point, 'mo')
+    #     draw_edge_list(candidate)
+
+    for edge in candidate:
+        n0, n1 = edge.nodeid0, edge.nodeid1
+        p0, p1 = map_node_dict[n0].point, map_node_dict[n1].point
+        if edge.oneway is True and not is_near_segment(last_point, point, p0, p1):
+            # 角度过大
+            continue
+        w0, w1 = 1.0, 10.0
+        # 加权计算分数，考虑夹角的影响
+        dist = point2segment(point, p0, p1)
+        score = w0 * dist + w1 * (1 - calc_included_angle(last_point, point, p0, p1))
+        if score < min_score:
+            min_score, sel_edge = score, edge
+
+    sel_node0, sel_node1 = sel_edge.nodeid0, sel_edge.nodeid1
+    project_point, ac = point_project(point, map_node_dict[sel_node0].point,
+                                      map_node_dict[sel_node1].point)
+    project_dist = np.linalg.norm(np.array(ac))
+    # 映射在线段外，取末端点
+    if project_dist > sel_edge.edge_length:
+        project_point = map_node_dict[sel_node1].point
+
+    return project_point, sel_edge
 
 
 def get_mod_point(taxi_data, candidate, last_point, cnt=-1):
@@ -422,44 +410,11 @@ def get_mod_point(taxi_data, candidate, last_point, cnt=-1):
     :param last_point: last matched point 
     :return: matched point, matched edge
     """
-    min_dist, sel_edge = 1e20, None
     point = [taxi_data.px, taxi_data.py]
-    if last_point is None:      # first point
-        for edge in candidate:
-            n0, n1 = edge.nodeid0, edge.nodeid1
-            p0, p1 = map_node_dict[n0].point, map_node_dict[n1].point
-            dist = point2segment(point, p0, p1)
-            if min_dist > dist:
-                min_dist, sel_edge = dist, edge
+    if last_point is None:
+        return _get_mod_point_first(candidate, point)
     else:
-        min_score = 1e20
-        # print "new {0}, len={1}".format(cnt, len(candidate))
-        if cnt == 59:
-            draw_point(point, 'bo')
-            draw_point(last_point, 'mo')
-            draw_edge_list(candidate)
-            # return None, None
-
-        for edge in candidate:
-            n0, n1 = edge.nodeid0, edge.nodeid1
-            p0, p1 = map_node_dict[n0].point, map_node_dict[n1].point
-            if edge.oneway is True and not is_near_segment(last_point, point, p0, p1):
-                # 角度过大
-                continue
-            w0, w1 = 1.0, 10.0
-            # 加权计算分数，考虑夹角的影响
-            dist = point2segment(point, p0, p1)
-            score = w0 * dist + w1 * (1 - calc_included_angle(last_point, point, p0, p1))
-            if score < min_score:
-                min_score, sel_edge = score, edge
-
-    try:
-        sel_node0, sel_node1 = sel_edge.nodeid0, sel_edge.nodeid1
-        project_point, _ = point_project(point, map_node_dict[sel_node0].point,
-                                     map_node_dict[sel_node1].point)
-    except AttributeError:
-        print cnt
-    return project_point, sel_edge
+        return _get_mod_point_later(candidate, point, last_point)
 
 
 def get_first_point(point, kdt, X):
@@ -535,7 +490,7 @@ def POINT_MATCH(traj_order):
             T = 10000 / 3600 * 10
             cur_point = [data.px, data.py]
             interval = calc_dist(cur_point, last_point)
-            print cnt, interval
+            # print cnt, interval
             if interval < T:
                 continue
             candidate_edges = get_candidate_later(last_point, last_edge)
@@ -544,8 +499,6 @@ def POINT_MATCH(traj_order):
             last_point = cur_point
             plt.text(data.px, data.py, '{0}'.format(cnt))
         cnt += 1
-        if cnt == 58:
-            break
 
     return traj_mod
 
@@ -568,7 +521,7 @@ def matching():
     draw_trace(traj_order)
 
     traj_mod = POINT_MATCH(traj_order)
-    draw_points(traj_mod)
+    # draw_points(traj_mod)
 
 
 fig = plt.figure(figsize=(16, 8))
