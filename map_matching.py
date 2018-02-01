@@ -6,7 +6,7 @@ from sklearn.neighbors import KDTree
 import math
 import Queue
 from map_struct import DistNode, MapEdge, MapNode
-from geo import point2segment, point_project, calc_dist, bl2xy, is_near_segment, calc_included_angle
+from geo import point2segment, point_project, calc_dist, bl2xy, is_near_segment, calc_included_angle, point_project_edge
 from time import clock
 import traj
 import numpy as np
@@ -318,13 +318,16 @@ def get_candidate_later(last_point, last_edge):
     edge_set = set()            # edge_set用于记录能够访问到的边
     q = Queue.PriorityQueue(maxsize=-1)     # 优先队列优化
 
-    # _, ac = point_project(point)
+    _, ac = point_project_edge(last_point, last_edge)
+
     if last_edge.oneway:
         node = last_edge.node1
-        dnode = DistNode(nodeid, 0)
-
-    # you should add last edge matched if current and last points projected are in the same edge
-    edge_set = set()
+        dnode = DistNode(node, 0)
+        q.put(dnode)
+    else:
+        node = last_edge.node1
+        dnode = DistNode(node, 0)
+        q.put(dnode)
     # r_point, ac = point_project(last_point, map_node_dict[last_edge.nodeid0].point,
     #                             map_node_dict[last_edge.nodeid1].point)
     # brief version
