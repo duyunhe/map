@@ -103,19 +103,25 @@ def point_project_edge(point, edge):
 
 
 def point_project(point, segment_point0, segment_point1):
-    '''
+    """
     :param point: point to be matched
     :param segment_point0: segment
     :param segment_point1: 
-    :return: projected point
-    '''
+    :return: projected point, state
+    """
     x, y = point[0:2]
     x0, y0 = segment_point0[0:2]
     x1, y1 = segment_point1[0:2]
     ap, ab = np.array([x - x0, y - y0]), np.array([x1 - x0, y1 - y0])
     ac = np.dot(ap, ab) / (np.dot(ab, ab)) * ab
     dx, dy = ac[0] + x0, ac[1] + y0
-    return [dx, dy], ac
+    state = 0
+    if np.dot(ap, ab) < 0:
+        state = -1
+    bp, ba = np.array([x - x1, y - y1]), np.array([x0 - x1, y0 - y1])
+    if np.dot(bp, ba) < 0:
+        state = 1
+    return [dx, dy], ac, state
 
 
 def point2segment(point, segment_point0, segment_point1):
