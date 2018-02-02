@@ -30,8 +30,8 @@ nodeid_list = []
 
 
 def edge2xy(e):
-    x0, y0 = map_node_dict[e.nodeid0].point[0:2]
-    x1, y1 = map_node_dict[e.nodeid1].point[0:2]
+    x0, y0 = e.node0.point[0:2]
+    x1, y1 = e.node1.point[0:2]
     return x0, y0, x1, y1
 
 
@@ -305,50 +305,64 @@ def get_candidate_first(taxi_data, cnt=-1):
     return edge_can_list
 
 
-def get_candidate_later(last_point, last_edge):
+def init_candidate_queue(last_point, last_edge, last_state, can_queue, node_set):
     """
-    :param last_point: [px, py]
-    :param last_edge: MapEdge
-    :return: edge_can_list [edge0, edge1....]
+    initialize the queue, add one or two points of the last edge
     """
-    edge_can_list = [last_edge]
-
-    T = 80000 / 3600 * 10                   # dist_thread
-    node_set = set()                        # node_set用于判断是否访问过
-    edge_set = set()                        # edge_set用于记录能够访问到的边
-    q = Queue.PriorityQueue(maxsize=-1)     # 优先队列优化
-
-    _, ac = point_project_edge(last_point, last_edge)
+    _, ac, state = point_project_edge(last_point, last_edge)
     project_dist = np.linalg.norm(np.array(ac))
-    dist0, dist1 = project_dist, last_edge.edge_length
+    dist0, dist1 = project_dist, last_edge.edge_length - project_dist
     if dist0 > last_edge.edge_length:
         dist0, dist1 = last_edge.edge_length, 0
 
     if last_edge.oneway:
         node = last_edge.node1
         dnode = DistNode(node, dist1)
-        q.put(dnode)
+        can_queue.put(dnode)
     else:
-        node = last_edge.node1
-        dnode = DistNode(node, dist1)
-        q.put(dnode)
         node = last_edge.node0
         dnode = DistNode(node, dist0)
-        q.put(dnode)
+        can_queue.put(dnode)
 
-    # r_point, ac = point_project(last_point, map_node_dict[last_edge.nodeid0].point,
-    #                             map_node_dict[last_edge.nodeid1].point)
-    # brief version
+        node = last_edge.node1
+        dnode = DistNode(node, dist1)
+        can_queue.put(dnode)
 
-    #     edge_set = edge_set | map_node_dict[nodeid].reach_set
-    #
-    # else:
-    #     nodeid0 = last_edge.nodeid0
-    #     edge_set = edge_set | map_node_dict[nodeid0].reach_set
-    #     nodeid1 = last_edge.nodeid1
-    #     edge_set = edge_set | map_node_dict[nodeid1].reach_set
-    # for i in edge_set:
-    #     edge_can_list.append(map_edge_list[i])
+    node_set.add(node.nodeid)
+
+
+def get_candidate_later(last_point, last_edge, last_state):
+    """
+    :param last_point: [px, py]
+    :param last_edge: MapEdge
+    :param last_state: direction of vehicle in map edge
+    :return: edge_can_list [edge0, edge1....]
+    """
+    edge_can_list = []
+    T = 80000 / 3600 * 10                   # dist_thread
+    node_set = set()                        # node_set用于判断是否访问过
+    edge_set = set()                        # edge_set用于记录能够访问到的边
+    edge_set.add(last_edge.edge_index)
+
+    q = Queue.PriorityQueue(maxsize=-1)     # 优先队列 best first search
+    init_candidate_queue(last_point, last_edge, last_state, q, node_set) # 搜索第一步，加入之前线段中的点
+
+    while not q.empty():
+        dnode = q.get()
+        cur_node, cur_dist = dnode.node, dnode.dist
+        if cur_dist >= T:       # 超过阈值后停止
+            break
+        for edge, node in cur_node.link_list:
+            if node.nodeid in node_set:
+                continue
+            node_set.add(node.nodeid)
+            edge_set.add(edge.edge_index)
+            next_dnode = DistNode(node, cur_dist + edge.edge_length)
+            node.prev_node = cur_node
+            q.put(next_dnode)
+
+    for i in edge_set:
+        edge_can_list.append(map_edge_list[i])
 
     return edge_can_list
 
@@ -357,7 +371,7 @@ def _get_mod_point_first(candidate, point):
     """
     :param candidate: 
     :param point: current point
-    :return: 
+    :return: project_point, sel_edge, driving direction: -1
     """
     min_dist, sel_edge = 1e20, None
 
@@ -370,7 +384,7 @@ def _get_mod_point_first(candidate, point):
             min_dist, sel_edge = dist, edge
 
     sel_node0, sel_node1 = sel_edge.node0, sel_edge.node1
-    project_point, ac = point_project(point, sel_node0.point, sel_node1.point)
+    project_point, _, state = point_project(point, sel_node0.point, sel_node1.point)
     return project_point, sel_edge
 
 
@@ -379,14 +393,9 @@ def _get_mod_point_later(candidate, point, last_point):
     :param candidate: 
     :param point: current position point
     :param last_point: last position point
-    :return: 
+    :return: project_point, sel_edge, driving direction
     """
-    min_score = 1e20
-    # print "new {0}, len={1}".format(cnt, len(candidate))
-    # if cnt == 37:
-    #     draw_point(point, 'bo')
-    #     draw_point(last_point, 'mo')
-    #     draw_edge_list(candidate)
+    min_score = 1e10
 
     for edge in candidate:
         p0, p1 = edge.node0.point, edge.node1.point
@@ -400,12 +409,10 @@ def _get_mod_point_later(candidate, point, last_point):
         if score < min_score:
             min_score, sel_edge = score, edge
 
-    project_point, ac = point_project(point, sel_edge.node0.point, sel_edge.node1.point)
-    project_dist = np.linalg.norm(np.array(ac))
-    # 映射在线段外，取末端点
-    if project_dist > sel_edge.edge_length:
+    project_point, _, state = point_project(point, sel_edge.node0.point, sel_edge.node1.point)
+    if state == 1:
+        # 点落在线段末端外
         project_point = sel_edge.node1.point
-
     return project_point, sel_edge
 
 
@@ -415,7 +422,7 @@ def get_mod_point(taxi_data, candidate, last_point, cnt=-1):
     :param taxi_data: Taxi_Data
     :param candidate: list[edge0, edge1, edge...]
     :param last_point: last matched point 
-    :return: matched point, matched edge
+    :return: matched point, matched edge, driving direction
     """
     point = [taxi_data.px, taxi_data.py]
     if last_point is None:
@@ -483,6 +490,7 @@ def POINT_MATCH(traj_order):
     """
     first_point = True
     last_point, last_edge = None, None
+    last_state = 0      # 判断双向道路当前是正向或者反向
     cnt = 0
     traj_mod = []
     for data in traj_order:
@@ -501,12 +509,13 @@ def POINT_MATCH(traj_order):
             # print cnt, interval
             if interval < T:
                 continue
-            candidate_edges = get_candidate_later(last_point, last_edge)
+            candidate_edges = get_candidate_later(last_point, last_edge, last_state)
             point, last_edge = get_mod_point(data, candidate_edges, last_point, cnt)
             traj_mod.append(point)
             last_point = cur_point
             plt.text(data.px, data.py, '{0}'.format(cnt))
         cnt += 1
+        print cnt
 
     return traj_mod
 
