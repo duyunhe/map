@@ -499,6 +499,7 @@ def POINT_MATCH(traj_order):
             # Taxi_Data .px .py .stime .speed
             first_point = False
             point, last_edge = get_mod_point(data, candidate_edges, last_point, cnt)
+
             traj_mod.append(point)
             last_point = point
         else:
@@ -510,9 +511,10 @@ def POINT_MATCH(traj_order):
             if interval < T:
                 continue
             candidate_edges = get_candidate_later(last_point, last_edge, last_state)
-            point, last_edge = get_mod_point(data, candidate_edges, last_point, cnt)
+            point, cur_edge = get_mod_point(data, candidate_edges, last_point, cnt)
+            trace = get_trace(cur_edge, point)
             traj_mod.append(point)
-            last_point = cur_point
+            last_point, last_edge = cur_point, cur_edge
             plt.text(data.px, data.py, '{0}'.format(cnt))
         cnt += 1
         print cnt
