@@ -313,21 +313,29 @@ def get_candidate_later(last_point, last_edge):
     """
     edge_can_list = [last_edge]
 
-    T = 80000 / 3600 * 10       # dist_thread
-    node_set = set()            # node_set用于判断是否访问过
-    edge_set = set()            # edge_set用于记录能够访问到的边
+    T = 80000 / 3600 * 10                   # dist_thread
+    node_set = set()                        # node_set用于判断是否访问过
+    edge_set = set()                        # edge_set用于记录能够访问到的边
     q = Queue.PriorityQueue(maxsize=-1)     # 优先队列优化
 
     _, ac = point_project_edge(last_point, last_edge)
+    project_dist = np.linalg.norm(np.array(ac))
+    dist0, dist1 = project_dist, last_edge.edge_length
+    if dist0 > last_edge.edge_length:
+        dist0, dist1 = last_edge.edge_length, 0
 
     if last_edge.oneway:
         node = last_edge.node1
-        dnode = DistNode(node, 0)
+        dnode = DistNode(node, dist1)
         q.put(dnode)
     else:
         node = last_edge.node1
-        dnode = DistNode(node, 0)
+        dnode = DistNode(node, dist1)
         q.put(dnode)
+        node = last_edge.node0
+        dnode = DistNode(node, dist0)
+        q.put(dnode)
+
     # r_point, ac = point_project(last_point, map_node_dict[last_edge.nodeid0].point,
     #                             map_node_dict[last_edge.nodeid1].point)
     # brief version
@@ -355,15 +363,14 @@ def _get_mod_point_first(candidate, point):
 
     # first point
     for edge in candidate:
-        n0, n1 = edge.nodeid0, edge.nodeid1
-        p0, p1 = map_node_dict[n0].point, map_node_dict[n1].point
+        # n0, n1 = edge.node0, edge.nodeid1
+        p0, p1 = edge.node0.point, edge.node1.point
         dist = point2segment(point, p0, p1)
         if min_dist > dist:
             min_dist, sel_edge = dist, edge
 
-    sel_node0, sel_node1 = sel_edge.nodeid0, sel_edge.nodeid1
-    project_point, ac = point_project(point, map_node_dict[sel_node0].point,
-                                      map_node_dict[sel_node1].point)
+    sel_node0, sel_node1 = sel_edge.node0, sel_edge.node1
+    project_point, ac = point_project(point, sel_node0.point, sel_node1.point)
     return project_point, sel_edge
 
 
@@ -382,8 +389,7 @@ def _get_mod_point_later(candidate, point, last_point):
     #     draw_edge_list(candidate)
 
     for edge in candidate:
-        n0, n1 = edge.nodeid0, edge.nodeid1
-        p0, p1 = map_node_dict[n0].point, map_node_dict[n1].point
+        p0, p1 = edge.node0.point, edge.node1.point
         if edge.oneway is True and not is_near_segment(last_point, point, p0, p1):
             # 角度过大
             continue
@@ -394,13 +400,11 @@ def _get_mod_point_later(candidate, point, last_point):
         if score < min_score:
             min_score, sel_edge = score, edge
 
-    sel_node0, sel_node1 = sel_edge.nodeid0, sel_edge.nodeid1
-    project_point, ac = point_project(point, map_node_dict[sel_node0].point,
-                                      map_node_dict[sel_node1].point)
+    project_point, ac = point_project(point, sel_edge.node0.point, sel_edge.node1.point)
     project_dist = np.linalg.norm(np.array(ac))
     # 映射在线段外，取末端点
     if project_dist > sel_edge.edge_length:
-        project_point = map_node_dict[sel_node1].point
+        project_point = sel_edge.node1.point
 
     return project_point, sel_edge
 
@@ -415,6 +419,7 @@ def get_mod_point(taxi_data, candidate, last_point, cnt=-1):
     """
     point = [taxi_data.px, taxi_data.py]
     if last_point is None:
+        # 第一个点
         return _get_mod_point_first(candidate, point)
     else:
         return _get_mod_point_later(candidate, point, last_point)
@@ -524,7 +529,7 @@ def matching():
     draw_trace(traj_order)
 
     traj_mod = POINT_MATCH(traj_order)
-    # draw_points(traj_mod)
+    draw_points(traj_mod)
 
 
 fig = plt.figure(figsize=(16, 8))
