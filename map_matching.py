@@ -192,79 +192,6 @@ def read_xml(filename):
     store_link()
 
 
-def get_trace_from_project(node, last_point, last_edge, cur_point, cur_edge, cnt):
-    pq = Queue.PriorityQueue(maxsize=-1)
-    x0, y0, x1, y1 = edge2xy(last_edge, node)
-    rx, ry, _ = point_project(last_point[0], last_point[1], x0, y0, x1, y1)
-    dist0, dist1 = calc_dist([rx, ry], [x0, y0]), calc_dist([rx, ry], [x1, y1])
-    # 短路径优先，因此每个点只会访问一次
-    # 在出队列时加入访问set中
-    vis_set = set()
-    if last_edge[EDGE_ONEWAY] is True:
-        pq.put(DistNode(last_edge[1], dist1))
-    else:
-        pq.put(DistNode(last_edge[0], dist0))
-        pq.put(DistNode(last_edge[1], dist1))
-
-    x0, y0, x1, y1 = edge2xy(cur_edge, node)
-    sx, sy, _ = point_project(cur_point[0], cur_point[1], x0, y0, x1, y1)
-    dist0, dist1 = calc_dist([sx, sy], [x0, y0]), calc_dist([sx, sy], [x1, y1])
-    obj0, obj1 = None, None
-    if cur_edge[EDGE_ONEWAY] is True:
-        obj0 = cur_edge[0]
-    else:
-        obj0, obj1 = cur_edge[0], cur_edge[1]
-
-    if last_edge == cur_edge:
-        # 就是同一条边
-        return [[rx, ry], [sx, sy]]
-
-    print_node = []
-    # 维护一个反向链表last_node, ndn->...->nd3->nd2->nd1->nd0
-    last_node = {}
-    final_dist = 1e20
-    while not pq.empty():
-        cur_node = pq.get()
-        cur_id, cur_dist = cur_node.ndid, cur_node.dist
-        vis_set.add(cur_id)
-        if cur_id == 'final':
-            break
-        print_node.append(node[cur_id])
-        # 到达终点
-        if cur_id == obj0:
-            next_dist = cur_dist + dist0
-            pq.put(DistNode('final', next_dist))
-            if next_dist < final_dist:
-                last_node['final'], final_dist = obj0, next_dist
-            continue
-        elif cur_id == obj1:
-            next_dist = cur_dist + dist1
-            pq.put(DistNode('final', next_dist))
-            if next_dist < final_dist:
-                last_node['final'], final_dist = obj1, next_dist
-            continue
-        edge_list = node[cur_id][EDGES]
-        for e, nd in edge_list:
-            next_dist = cur_dist + e[EDGE_LENGTH]
-            if nd in vis_set:
-                continue
-            pq.put(DistNode(nd, next_dist))
-            last_node[nd] = cur_id
-
-    path = []
-    cur_id = 'final'
-    while cur_id in last_node:
-        cur_id = last_node[cur_id]
-        path.append(cur_id)
-    path.reverse()
-    trace = []
-    trace.append([rx, ry])
-    for nd in path:
-        trace.append([node[nd][0], node[nd][1]])
-    trace.append([sx, sy])
-    return trace
-
-
 def make_kdtree():
     nd_list = []
     for key, item in map_node_dict.items():
@@ -482,6 +409,34 @@ def get_mod_points0(traj_order):
     return traj_mod
 
 
+def get_trace(last_edge, edge, last_point, point):
+    """
+
+    :param last_edge:  last matched edge
+    :param edge:  current matched edge
+    :param last_point:  last position point
+    :param point:  current matched(projected) point
+    :return:
+    """
+    spoint, _, _ = point_project_edge(last_point, last_edge)
+    if last_edge == edge:
+        return [spoint, point]
+
+    trace = [point]
+    n0, n1 = edge.node0, edge.node1
+    if n0.prev_node == n1:      # n1 is nearer from last point
+        cur_node = n1
+    else:
+        cur_node = n0
+    while cur_node != last_edge.node0 and cur_node != last_edge.node1:
+        trace.append(cur_node.point)
+        cur_node = cur_node.prev_node
+
+    trace.append(cur_node.point)
+    trace.append(spoint)
+    return trace
+
+
 def POINT_MATCH(traj_order):
     """
     using segments sim dynamic comparation, 
@@ -512,12 +467,12 @@ def POINT_MATCH(traj_order):
                 continue
             candidate_edges = get_candidate_later(last_point, last_edge, last_state)
             point, cur_edge = get_mod_point(data, candidate_edges, last_point, cnt)
-            trace = get_trace(cur_edge, point)
+            trace = get_trace(last_edge, cur_edge, last_point, point)
+            draw_seg(trace, 'b')
             traj_mod.append(point)
             last_point, last_edge = cur_point, cur_edge
             plt.text(data.px, data.py, '{0}'.format(cnt))
         cnt += 1
-        print cnt
 
     return traj_mod
 
