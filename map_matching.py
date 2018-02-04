@@ -411,7 +411,7 @@ def get_mod_points0(traj_order):
 
 def get_trace(last_edge, edge, last_point, point):
     """
-
+    use prev_node to generate the path reversely
     :param last_edge:  last matched edge
     :param edge:  current matched edge
     :param last_point:  last position point
