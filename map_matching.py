@@ -186,10 +186,12 @@ def calc_node_dict(node):
 
 
 def read_xml(filename):
+    t = clock()
     tree = ET.parse(filename)
     store_node(tree)
     store_edge(tree)
     store_link()
+    print 'load map', clock() - t
 
 
 def make_kdtree():
@@ -472,7 +474,11 @@ def POINT_MATCH(traj_order):
             traj_mod.append(point)
             last_point, last_edge = cur_point, cur_edge
             plt.text(data.px, data.py, '{0}'.format(cnt))
+
+        if cnt == 24:
+            break
         cnt += 1
+        print cnt
 
     return traj_mod
 
