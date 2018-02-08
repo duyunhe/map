@@ -92,7 +92,7 @@ def load_traj(filename):
 
 def load_taxi(begin_index, end_index):
     traj_list = []
-    fp = open('./data/101629109217.txt')
+    fp = open('./data/101629109218.txt')
     cnt = 0
     for line in fp.readlines():
         items = line.strip('\n').split(',')
@@ -133,4 +133,4 @@ def load_lishui_taxi(filename):
     return traj_list
 
 
-print_taxi(load_taxi(600, 700))
+print_taxi(load_taxi(1000, 1500))
