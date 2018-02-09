@@ -8,6 +8,10 @@ from datetime import datetime
 class TaxiData:
     def __init__(self, px, py, speed, stime):
         self.px, self.py, self.speed, self.stime = px, py, speed, stime
+        self.edge_info = []
+
+    def set_edge(self, edge, score):
+        self.edge_info.append([edge, score])
 
 
 def cmp1(temp0, temp1):
@@ -133,4 +137,4 @@ def load_lishui_taxi(filename):
     return traj_list
 
 
-print_taxi(load_taxi(1000, 1500))
+print_taxi(load_taxi(3000, 3300))

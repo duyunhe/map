@@ -36,8 +36,9 @@ class MapEdge(object):
     oneway(true or false), edge_index, edge_length
     维护list[MapEdge]
     """
-    def __init__(self, node0, node1, oneway, edge_index, edge_length):
+    def __init__(self, node0, node1, oneway, edge_index, edge_length, way_id):
         self.node0, self.node1 = node0, node1
         self.oneway = oneway
         self.edge_index = edge_index
         self.edge_length = edge_length
+        self.way_id = way_id

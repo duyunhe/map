@@ -27310,6 +27310,7 @@
 		</way>
 		<way id="360493032">
 			<nd ref="1915822079"/>
+			<nd ref="5295808311"/>
 			<nd ref="3650307877"/>
 			<nd ref="4736085421"/>
 			<nd ref="4736085422"/>
@@ -27322,6 +27323,12 @@
 			<nd ref="5043782446"/>
 			<nd ref="5043782448"/>
 			<tag k="highway" v="residential"/>
+		</way>
+		<way id="5481592180">
+			<nd ref="2295718196"/>
+			<nd ref="5295808295"/>
+			<tag k="highway" v="primary_link"/>
+			<tag k="oneway" v="yes"/>
 		</way>
 		<way id="516711864">
 			<nd ref="5043782530"/>
