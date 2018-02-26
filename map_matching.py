@@ -472,7 +472,7 @@ def POINT_MATCH(traj_order):
             candidate_edges = get_candidate_first(data, cnt)
             # Taxi_Data .px .py .stime .speed
             first_point = False
-            mod_point, last_edge = get_mod_point(data, candidate_edges, last_point, cnt)
+            mod_point, last_edge, _ = get_mod_point(data, candidate_edges, last_point, cnt)
             state = 'c'
             traj_mod.append(mod_point)
             last_point = mod_point
@@ -492,19 +492,19 @@ def POINT_MATCH(traj_order):
                 mod_point, cur_edge = get_mod_point(data, candidate_edges, None, cnt)
                 state = 'c'
             else:
-                mod_point, cur_edge = get_mod_point(data, candidate_edges, last_point, cnt)
+                mod_point, cur_edge, _ = get_mod_point(data, candidate_edges, last_point, cnt)
                 state = 'r'
 
-            # if state == 'r':
-            #     trace = get_trace(last_edge, cur_edge, last_point, mod_point)
-            #     draw_seg(trace, 'b')
+            if state == 'r':
+                trace = get_trace(last_edge, cur_edge, last_point, mod_point)
+                draw_seg(trace, 'b')
 
             offset_dist = calc_dist(mod_point, cur_point)
             if offset_dist > 100:
                 # 判断是否出现太远的情况
                 candidate_edges = get_candidate_first(data, cnt)
                 # draw_edge_list(candidate_edges)
-                mod_point, cur_edge = get_mod_point(data, candidate_edges, None, cnt)
+                mod_point, cur_edge, _ = get_mod_point(data, candidate_edges, None, cnt)
                 state = 'm'
 
             traj_mod.append(mod_point)
