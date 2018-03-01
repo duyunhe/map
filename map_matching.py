@@ -10,7 +10,7 @@ from geo import point2segment, point_project, calc_dist, bl2xy, is_near_segment,
 from time import clock
 import traj
 import numpy as np
-
+fp = open('point.txt', 'w')
 color = ['r-', 'b-', 'g-', 'c-', 'm-', 'y-', 'c-', 'r-', 'b-', 'orchid', 'm--', 'y--', 'c--', 'k--', 'r:']
 region = {'primary': 0, 'secondary': 1, 'tertiary': 2,
           'unclassified': 5, 'trunk': 3, 'service': 4, 'trunk_link': 6,
@@ -514,8 +514,11 @@ def POINT_MATCH(traj_order):
         plt.text(mod_point[0], mod_point[1], '{0}'.format(cnt), color=state)
 
         cnt += 1
-        print cnt
-
+        print cnt, data.px, data.py, mod_point[0], mod_point[1]
+        if 77 <= cnt <= 127:
+            result = '{0},{1}\n'.format(mod_point[0], mod_point[1])
+            fp.write(result)
+    fp.close()
     return traj_mod
 
 
@@ -592,7 +595,7 @@ def DYN_MATCH(traj_order):
         plt.text(mod_point[0], mod_point[1], '{0}'.format(cnt), color=state)
 
         cnt += 1
-        print cnt
+        print cnt, data.px, data.py
 
     return traj_mod
 

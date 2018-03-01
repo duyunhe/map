@@ -1,10 +1,10 @@
-#coding=utf-8
+# coding=utf-8
 from ctypes import *
 import math
 import numpy as np
 from map_struct import MapEdge, MapNode
 
-dll = WinDLL("CoordTransDLL.dll")
+dll = WinDLL("D:/map/CoordTransDLL.dll")
 
 
 class BLH(Structure):

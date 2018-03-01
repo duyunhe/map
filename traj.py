@@ -96,7 +96,7 @@ def load_traj(filename):
 
 def load_taxi(begin_index, end_index):
     traj_list = []
-    fp = open('./data/101629109218.txt')
+    fp = open('D:/map/data/101629109218.txt')
     cnt = 0
     for line in fp.readlines():
         items = line.strip('\n').split(',')
