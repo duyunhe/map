@@ -2,9 +2,8 @@
 from ctypes import *
 import math
 import numpy as np
-from map_struct import MapEdge, MapNode
 
-dll = WinDLL("D:/map/CoordTransDLL.dll")
+dll = WinDLL("CoordTransDLL.dll")
 
 
 class BLH(Structure):
@@ -46,6 +45,12 @@ def xy2bl(x, y):
 
 
 def calc_dist(pt0, pt1):
+    """
+    计算两点距离
+    :param pt0: [x0, y0]
+    :param pt1: [x1, y1]
+    :return: 
+    """
     v0 = np.array(pt0)
     v1 = np.array(pt1)
     dist = np.linalg.norm(v0 - v1)
@@ -108,6 +113,8 @@ def point_project(point, segment_point0, segment_point1):
     :param segment_point0: segment
     :param segment_point1: 
     :return: projected point, state
+            state 为1 在s0s1的延长线上  
+            state 为-1 在s1s0的延长线上
     """
     x, y = point[0:2]
     x0, y0 = segment_point0[0:2]
@@ -153,11 +160,4 @@ def draw_raw(traj, ax):
         xlist.append(point.px)
         ylist.append(point.py)
     ax.plot(xlist, ylist, marker='o', linestyle='--', color='k', lw=1)
-
-
-def calc_dist(pt0, pt1):
-    v0 = np.array([pt0[0], pt0[1]])
-    v1 = np.array([pt1[0], pt1[1]])
-    dist = np.linalg.norm(v0 - v1)
-    return dist
 
