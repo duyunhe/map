@@ -30,7 +30,11 @@ def draw_node(n, c, pos, marker='o'):
     x = n.point[0]
     y = n.point[1]
     plt.plot(x, y, marker=marker, color=c)
-    plt.text(x + 0.5, y + 0.5, '{0}'.format(pos), color=c)
+
+
+def add_draw_node(node, edge_set):
+    for e, _ in node.link_list:
+        edge_set.add(e.edge_index)
 
 
 fp_node = open('./map/node.csv')
@@ -71,9 +75,12 @@ for line in fp.readlines():
     cx, cy = map(float, items[3:5])
     node1 = MapNode([cx, cy], idx)
     draw_node(node1, 'k', idx, '+')
+    dist = float(items[5])
+    plt.text(px + 0.5, py + 0.5, '{0},{1:.2f}'.format(idx, dist), color='r')
     idx += 1
     edge_set.add(eid)
 
+add_draw_node(node_list[4693], edge_set)
 for eid in edge_set:
     draw_edge(edge_list[eid], 'b')
 

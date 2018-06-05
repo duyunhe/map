@@ -44,7 +44,7 @@ def coordtran(Lat, Long):
 
 
 def coord_xy_to_bl(x, y):
-    dll = c.windll.LoadLibrary('D:/map/CoordTransDLL.dll')
+    dll = c.windll.LoadLibrary('CoordTransDLL.dll')
     HZ_xyH_2_WGS84_BLH = dll.HZ_xyH_2_WGS84_BLH
     HZ_xyH_2_WGS84_BLH.restype = c.c_int
     HZ_xyH_2_WGS84_BLH.argtypes = [xyH, c.POINTER(BLH)]
@@ -92,7 +92,7 @@ def dis_measure(p1, p2):
     return list0
 # B, L, H = coord_xy_to_bl(-117587.379655, 58313.7994092)  # 143
 # B1, L1, H1 = coord_xy_to_bl(-117714.236518, 58363.237168)  # 144
-fp = open('D:/map/point.txt')
+fp = open('point.txt')
 cnt = 0
 star = 0
 d = 0

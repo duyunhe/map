@@ -256,6 +256,7 @@ def init_candidate_queue(last_point, last_edge, can_queue, node_set):
         node = last_edge.node0
         dnode = DistNode(node, dist0)
         can_queue.put(dnode)
+        node_set.add(node.nodeid)
 
         node = last_edge.node1
         dnode = DistNode(node, dist1)
@@ -368,7 +369,7 @@ def get_mod_point(taxi_data, candidate, last_point, cnt=-1):
     :param taxi_data: Taxi_Data
     :param candidate: list[edge0, edge1, edge...]
     :param last_point: last matched point 
-    :return: matched point, matched edge, driving direction
+    :return: matched point, matched edge, minimum distance from point to matched edge
     """
     point = [taxi_data.px, taxi_data.py]
     if last_point is None:
@@ -469,6 +470,7 @@ def POINT_MATCH(traj_order):
     traj_mod = []
     for data in traj_order:
         if first_point:
+            # 第一个点
             candidate_edges = get_candidate_first(data, cnt)
             # Taxi_Data .px .py .stime .speed
             first_point = False
@@ -477,8 +479,9 @@ def POINT_MATCH(traj_order):
             traj_mod.append(mod_point)
             last_point = mod_point
         else:
+            # 随后的点
             # 首先判断两个点是否离得足够远
-            T = 10000 / 3600 * 10
+            T = 15
             cur_point = [data.px, data.py]
             interval = calc_dist(cur_point, last_point)
             # print cnt, interval
@@ -489,7 +492,7 @@ def POINT_MATCH(traj_order):
             if len(candidate_edges) == 0:
                 # no match, restart
                 candidate_edges = get_candidate_first(data, cnt)
-                mod_point, cur_edge = get_mod_point(data, candidate_edges, None, cnt)
+                mod_point, cur_edge, _ = get_mod_point(data, candidate_edges, None, cnt)
                 state = 'c'
             else:
                 mod_point, cur_edge, _ = get_mod_point(data, candidate_edges, last_point, cnt)
@@ -514,7 +517,7 @@ def POINT_MATCH(traj_order):
         plt.text(mod_point[0], mod_point[1], '{0}'.format(cnt), color=state)
 
         cnt += 1
-        print cnt, data.px, data.py, mod_point[0], mod_point[1]
+        # print cnt, data.px, data.py, mod_point[0], mod_point[1]
         if 77 <= cnt <= 127:
             result = '{0},{1}\n'.format(mod_point[0], mod_point[1])
             fp.write(result)
@@ -614,7 +617,7 @@ def draw_trace(traj):
 def matching():
     read_xml('ls.xml')
     draw_map()
-    traj_order = traj.load_lishui_taxi('traj1.txt')
+    traj_order = traj.load_taxi(13)
     draw_trace(traj_order)
 
     traj_mod = POINT_MATCH(traj_order)

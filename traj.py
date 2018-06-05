@@ -94,9 +94,9 @@ def load_traj(filename):
     return order
 
 
-def load_taxi(begin_index, end_index):
+def load_taxi(index):
     traj_list = []
-    fp = open('D:/map/data/101629109218.txt')
+    fp = open('data/trace/lishui_{0}.txt'.format(index))
     cnt = 0
     for line in fp.readlines():
         items = line.strip('\n').split(',')
@@ -106,14 +106,8 @@ def load_taxi(begin_index, end_index):
             continue
         px, py = bl2xy(lati, longi)
         speed_time = datetime.strptime(items[5], "%Y-%m-%d %H:%M:%S")
-        if cnt < begin_index:
-            cnt += 1
-            continue
-        elif cnt > end_index:
-            break
         data = TaxiData(px, py, speed, speed_time)
         traj_list.append(data)
-        cnt += 1
     traj_list.sort(cmp1)
     return traj_list
 
@@ -136,5 +130,3 @@ def load_lishui_taxi(filename):
         traj_list.append(TaxiData(px, py, 0, stime))
     return traj_list
 
-
-print_taxi(load_taxi(3000, 3300))
